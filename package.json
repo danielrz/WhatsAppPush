@@ -1,0 +1,21 @@
+{
+  "name": "whatsapppush",
+  "version": "1.0.0",
+  "description": "",
+  "main": "handler.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@hapi/joi": "^17.1.1",
+    "aws-sdk": "^2.1055.0",
+    "csvtojson": "^2.0.10",
+    "http-status": "^1.5.0",
+    "node-xlsx": "^0.21.0",
+    "twilio": "^3.73.0",
+    "uuid": "^8.3.2"
+  }
+}

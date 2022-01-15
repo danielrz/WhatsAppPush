@@ -1,0 +1,241 @@
+service: whatsapppush
+
+custom:
+  stage: ${opt:stage, self.provider.stage}
+  templatesTableName: Templates
+  recipientS3BucketName: whatsapppush-recipient-file-storages-tresorly
+  messageQueueName: whatsapppush-message-queue-name
+  notificationTaskTableName: NotificationTask
+  statusLogsTableName: StatusLogs
+
+provider:
+  name: aws
+  runtime: nodejs12.x
+  stage: dev
+  region: us-east-1 # Default aws region US East (N. Virginia)
+  versionFunctions: false # Disable function versioning, default true
+  # Lambda Function IAM role for resources which is being used by this service
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - dynamodb:DescribeTable
+        - dynamodb:Query
+        - dynamodb:Scan
+        - dynamodb:GetItem
+        - dynamodb:PutItem
+        - dynamodb:UpdateItem
+        - dynamodb:DeleteItem
+      Resource:
+        - "Fn::GetAtt": [TemplatesTable, Arn]
+        - "Fn::GetAtt": [NotificationTaskTable, Arn]
+        - "Fn::GetAtt": [StatusLogsTable, Arn]
+    - Effect: "Allow"
+      Action:
+        - "s3:*"
+      Resource:
+        - "arn:aws:s3:::*"
+    - Effect: "Allow"
+      Action:
+        - "sqs:*"
+      Resource:
+        - Fn::GetAtt: [WhatsAppMessageQueue, Arn]
+
+  # Define environment global to this service
+  environment:
+    DDB_TEMPLATES_TABLE_NAME: ${self:custom.templatesTableName}
+    RECIPIENT_S3_BUCKET_NAME: ${self:custom.recipientS3BucketName}
+    SMS_MESSAGE_QUEUE_URL: ${self:resources.Outputs.WhatsAppMessageQueueURL.Value}
+    DDB_NOTIFICATION_TASK_TABLE_NAME: ${self:custom.notificationTaskTableName}
+    DDB_STATUS_LOGS_TABLE_NAME: ${self:custom.statusLogsTableName}
+    TWILIO_ACCOUNT_SID: AC0bc2675f879773ca12e39c271ef72f16
+    TWILIO_AUTH_TOKEN: 8b02cb167f4985e5f95a307f14cdebd7
+    WHATSAPP_NUMBER_FROM: +14155238886
+
+functions:
+  CreateTemplates:
+    handler: handlers/template.create
+    description: Function to handle business logic to create templates
+    # HTTP events to trigger CreateTemplates lambda function
+    events:
+      - http:
+          path: templates
+          method: post
+          cors: true
+  ListTemplates:
+    handler: handlers/template.list
+    description: Function to handle business logic to get all templates
+    # HTTP events to trigger ListTemplates lambda function
+    events:
+      - http:
+          path: templates/{user_id}
+          method: get
+          cors: true
+  UpdateTemplates:
+    handler: handlers/template.update
+    description: Function to handle business logic to update templates
+    # HTTP events to trigger UpdateTemplates lambda function
+    events:
+      - http:
+          path: templates/{user_id}/{template_id}
+          method: put
+          cors: true
+  DeleteTemplates:
+    handler: handlers/template.delete
+    description: Function to handle business logic to delete templates
+    # HTTP events to trigger DeleteTemplates lambda function
+    events:
+      - http:
+          path: templates/{user_id}/{template_id}
+          method: delete
+          cors: true
+  DetailsTemplates:
+    handler: handlers/template.details
+    description: Function to handle business logic to get template details
+    # HTTP events to trigger DetailsTemplates lambda function
+    events:
+      - http:
+          path: templates/{user_id}/{template_id}
+          method: get
+          cors: true
+  GetSignedUrl:
+    handler: handlers/upload.getSignedUrl
+    description: Function to get s3 bucket signed url to upload the recipients file
+    # HTTP events to trigger GetSignedUrl lambda function
+    events:
+      - http:
+          path: upload-url/{user_id}
+          method: post
+          cors: true
+  CreateNotification:
+    handler: handlers/notification.create
+    description: Function to handle business logic to create notification task
+    # HTTP events to trigger CreateNotification lambda function
+    events:
+      - http:
+          path: notification
+          method: post
+          cors: true
+  ListNotifications:
+    handler: handlers/notification.list
+    description: Function to handle business logic to get notification list
+    # HTTP events to trigger ListNotifications lambda function
+    events:
+      - http:
+          path: notification/{user_id}
+          method: get
+          cors: true
+  NotificationProcessor:
+    handler: handlers/notification.process
+    description: Function to handle business logic to process notification task (sending WhatsApp notification)
+    events:
+      - sqs:
+          arn: ${self:resources.Outputs.WhatsAppMessageQueueARN.Value}
+          batchSize: 1
+  MessageStatusCallBack:
+    handler: handlers/notification.statusCallback
+    description: Function to handle business logic to handle real time feedback of WhatsApp message
+    # HTTP events to trigger MessageStatusCallBack lambda function
+    events:
+      - http:
+          path: notification/status
+          method: post
+          cors: true
+  ListStatusLogs:
+    handler: handlers/status.list
+    description: Function to handle business logic to get status logs list
+    # HTTP events to trigger ListStatusLogs lambda function
+    events:
+      - http:
+          path: status/{notification_id}
+          method: get
+          cors: true
+  DetailsStatusLog:
+    handler: handlers/status.details
+    description: Function to handle business logic to get status log details
+    # HTTP events to trigger DetailsStatusLog lambda function
+    events:
+      - http:
+          path: status/{notification_id}/{log_id}
+          method: get
+          cors: true
+  StatusLogSummary:
+    handler: handlers/status.summary
+    description: Function to handle business logic to get status log summary
+    # HTTP events to trigger StatusLogSummary lambda function
+    events:
+      - http:
+          path: status/summary/{notification_id}
+          method: get
+          cors: true
+
+# CloudFormation resource templates for infra which will be used by this service
+resources:
+  Resources:
+    TemplatesTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:custom.templatesTableName}
+        AttributeDefinitions:
+          - AttributeName: user_id
+            AttributeType: S
+          - AttributeName: template_id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: user_id
+            KeyType: HASH
+          - AttributeName: template_id
+            KeyType: RANGE
+        # Set the capacity to auto-scale
+        BillingMode: PAY_PER_REQUEST
+    RecipientFilesS3Bucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: ${self:custom.recipientS3BucketName}
+    WhatsAppMessageQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: ${self:custom.messageQueueName}
+    NotificationTaskTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:custom.notificationTaskTableName}
+        AttributeDefinitions:
+          - AttributeName: user_id
+            AttributeType: S
+          - AttributeName: notification_id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: user_id
+            KeyType: HASH
+          - AttributeName: notification_id
+            KeyType: RANGE
+        # Set the capacity to auto-scale
+        BillingMode: PAY_PER_REQUEST
+    StatusLogsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:custom.statusLogsTableName}
+        AttributeDefinitions:
+          - AttributeName: notification_id
+            AttributeType: S
+          - AttributeName: log_id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: notification_id
+            KeyType: HASH
+          - AttributeName: log_id
+            KeyType: RANGE
+        # Set the capacity to auto-scale
+        BillingMode: PAY_PER_REQUEST
+
+  Outputs:
+    WhatsAppMessageQueueURL:
+      Description: WhatsAppMessageQueue URL
+      Value:
+        Ref: WhatsAppMessageQueue
+    WhatsAppMessageQueueARN:
+      Description: The ARN of the WhatsAppMessageQueue
+      Value:
+        Fn::GetAtt:
+          - WhatsAppMessageQueue
+          - Arn
