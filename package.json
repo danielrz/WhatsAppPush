@@ -13,6 +13,7 @@
     "@hapi/joi": "^17.1.1",
     "aws-sdk": "^2.1055.0",
     "csvtojson": "^2.0.10",
+    "dotenv": "^12.0.3",
     "http-status": "^1.5.0",
     "node-xlsx": "^0.21.0",
     "twilio": "^3.73.0",

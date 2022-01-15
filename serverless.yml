@@ -47,8 +47,6 @@ provider:
     SMS_MESSAGE_QUEUE_URL: ${self:resources.Outputs.WhatsAppMessageQueueURL.Value}
     DDB_NOTIFICATION_TASK_TABLE_NAME: ${self:custom.notificationTaskTableName}
     DDB_STATUS_LOGS_TABLE_NAME: ${self:custom.statusLogsTableName}
-    TWILIO_ACCOUNT_SID: AC0bc2675f879773ca12e39c271ef72f16
-    TWILIO_AUTH_TOKEN: 8b02cb167f4985e5f95a307f14cdebd7
     WHATSAPP_NUMBER_FROM: +14155238886
 
 functions:
